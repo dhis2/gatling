@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-package io.gatling.core.stats.writer
+package io.gatling.logparser.cli
 
-object RecordHeader {
-  object Run extends RecordHeader(0)
-  object Request extends RecordHeader(1)
-  object User extends RecordHeader(2)
-  object Group extends RecordHeader(3)
-  object Error extends RecordHeader(4)
-}
-
-sealed abstract class RecordHeader(val value: Byte)
+final case class LogParserArgs(
+    configPath: String,
+    logFilePath: String,
+    debugEnabled: Boolean,
+    scanSubdirs: Boolean
+)

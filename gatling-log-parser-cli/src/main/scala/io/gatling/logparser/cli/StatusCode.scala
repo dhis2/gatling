@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package io.gatling.core.stats.writer
+package io.gatling.logparser.cli
 
-object RecordHeader {
-  object Run extends RecordHeader(0)
-  object Request extends RecordHeader(1)
-  object User extends RecordHeader(2)
-  object Group extends RecordHeader(3)
-  object Error extends RecordHeader(4)
+object StatusCode {
+  case object Success extends StatusCode(0)
+  case object InvalidArguments extends StatusCode(1)
+  case object AssertionsFailed extends StatusCode(2)
 }
 
-sealed abstract class RecordHeader(val value: Byte)
+private[logparser] sealed abstract class StatusCode(val code: Int) extends Product with Serializable

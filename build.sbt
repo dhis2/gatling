@@ -21,6 +21,31 @@ Global / gatlingDevelopers := Seq(
 ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
 Global / scalaVersion := "2.13.16"
 
+// Exclude unused spotless keys from linting for modules that disable SbtSpotless
+Global / excludeLintKeys ++= Set(
+  app / spotless,
+  app / spotlessJava,
+  app / spotlessKotlin,
+  benchmarks / spotless,
+  benchmarks / spotlessJava,
+  benchmarks / spotlessKotlin,
+  charts / spotless,
+  charts / spotlessJava,
+  charts / spotlessKotlin,
+  commons / spotless,
+  commons / spotlessJava,
+  commons / spotlessKotlin,
+  jsonpath / spotless,
+  jsonpath / spotlessJava,
+  jsonpath / spotlessKotlin,
+  redis / spotless,
+  redis / spotlessJava,
+  redis / spotlessKotlin,
+  testFramework / spotless,
+  testFramework / spotlessJava,
+  testFramework / spotlessKotlin
+)
+
 lazy val root = Project("gatling-parent", file("."))
   .enablePlugins(GatlingOssPlugin)
   .disablePlugins(SbtSpotless)
@@ -43,7 +68,8 @@ lazy val root = Project("gatling-parent", file("."))
     charts,
     app,
     recorder,
-    testFramework
+    testFramework,
+    logParserCli
   )
   .settings(basicSettings)
   .settings(skipPublishing)
@@ -142,3 +168,20 @@ lazy val testFramework = gatlingModule("gatling-test-framework")
   .disablePlugins(SbtSpotless)
   .dependsOn(app)
   .settings(libraryDependencies ++= testFrameworkDependencies)
+
+lazy val logParserCli = gatlingModule("gatling-log-parser-cli")
+  .enablePlugins(JavaAppPackaging)
+  .dependsOn(charts % "compile->compile;test->test")
+  .settings(
+    executableScriptName := "glog",
+    Compile / mainClass := Some("io.gatling.logparser.GatlingLogParser"),
+    
+    // Fix Java 9+ module access restrictions for StringInternals
+    bashScriptExtraDefines += """addJava "--add-opens=java.base/java.lang=ALL-UNNAMED"""",
+    
+    // Package configuration
+    Universal / packageName := "glog",
+    maintainer := "gatling.io",
+    packageSummary := "Gatling Log Parser CLI",
+    packageDescription := "Fast CLI tool for parsing Gatling simulation.log files to CSV"
+  )

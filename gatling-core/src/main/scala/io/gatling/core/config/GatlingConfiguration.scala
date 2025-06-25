@@ -58,6 +58,16 @@ object GatlingConfiguration extends StrictLogging {
     mapToGatlingConfig(config)
   }
 
+  def loadFromFile(configFile: java.io.File): GatlingConfiguration = {
+    logger.info(s"Loading Gatling configuration from file: ${configFile.getAbsolutePath}")
+
+    val defaultsConfig = ConfigFactory.parseResources(getClass.getClassLoader, GatlingDefaultsConfigFile)
+    val customConfig = ConfigFactory.parseFile(configFile)
+
+    val config = configChain(ConfigFactory.systemProperties, customConfig, defaultsConfig)
+    mapToGatlingConfig(config)
+  }
+
   private def coreConfiguration(config: Config) =
     new CoreConfiguration(
       encoding = config.getString(core.Encoding),

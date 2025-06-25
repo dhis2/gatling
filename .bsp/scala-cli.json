@@ -1,0 +1,20 @@
+{
+  "name": "scala-cli",
+  "argv": [
+    "/usr/share/scala/scala-cli",
+    "bsp",
+    "--json-options",
+    "/home/ivo/code/dhis2/performance/gatling/.scala-build/ide-options-v2.json",
+    "--json-launcher-options",
+    "/home/ivo/code/dhis2/performance/gatling/.scala-build/ide-launcher-options.json",
+    "--envs-file",
+    "/home/ivo/code/dhis2/performance/gatling/.scala-build/ide-envs.json",
+    "/home/ivo/code/dhis2/performance/gatling/GatlingSimulationLogParser.scala"
+  ],
+  "version": "1.8.3",
+  "bspVersion": "2.1.1",
+  "languages": [
+    "scala",
+    "java"
+  ]
+}

@@ -45,3 +45,10 @@ gatling-version.properties
 version.sbt
 .claude
 CLAUDE.local.md
+plan*.md
+
+# glog CLI artifacts
+glog
+*.csv
+*.build_artifacts.txt
+examples

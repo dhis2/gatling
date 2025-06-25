@@ -19,7 +19,7 @@ package io.gatling.charts.stats
 import io.gatling.commons.stats.Status
 import io.gatling.core.stats.message.MessageEvent
 
-private final case class RequestRecord(
+final case class RequestRecord(
     group: Option[Group],
     name: String,
     status: Status,
@@ -30,6 +30,6 @@ private final case class RequestRecord(
     errorMessage: Option[String],
     incoming: Boolean
 )
-private final case class GroupRecord(group: Group, duration: Int, cumulatedResponseTime: Int, status: Status, start: Long, startBucket: Int)
-private final case class UserRecord(scenario: String, event: MessageEvent, timestamp: Long)
-private final case class ErrorRecord(message: String, timestamp: Long)
+final case class GroupRecord(group: Group, duration: Int, cumulatedResponseTime: Int, status: Status, start: Long, startBucket: Int)
+final case class UserRecord(scenario: String, event: MessageEvent, timestamp: Long)
+final case class ErrorRecord(message: String, timestamp: Long)

@@ -137,6 +137,9 @@ object GatlingLogParser extends StrictLogging {
                 writer.close()
               }
             } catch {
+              case e: java.io.EOFException =>
+                logger.error(s"Failed to process ${logFile.getAbsolutePath} - file is truncated or empty")
+                failedCount += 1
               case e: Exception =>
                 logger.error(s"Failed to process ${logFile.getAbsolutePath}", e)
                 failedCount += 1

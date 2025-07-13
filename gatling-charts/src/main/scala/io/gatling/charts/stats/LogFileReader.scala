@@ -241,7 +241,7 @@ private final class FirstPassParser(logFile: File, zoneId: ZoneId) extends LogFi
         }
       } catch {
         case e: EOFException =>
-          logger.error(s"Log file is truncated after record $count, can only generate partial results.", e)
+          logger.error(s"Log file is truncated after record $count, can only generate partial results.")
           continue = false
       }
     }
@@ -363,7 +363,7 @@ private final class SecondPassParser(logFile: File, runInfo: RunInfo, step: Doub
         }
       } catch {
         case e: EOFException =>
-          logger.error(s"Log file is truncated after record $count, can only generate partial results.", e)
+          logger.error(s"Log file is truncated after record $count, can only generate partial results.")
           continue = false
       }
     }
@@ -531,7 +531,7 @@ private final class RawRecordsParser(logFile: File, runInfo: RunInfo) extends Lo
         }
       } catch {
         case e: EOFException =>
-          logger.error(s"Log file is truncated after record $count, can only generate partial results.", e)
+          logger.error(s"Log file is truncated after record $count, can only generate partial results.")
           continue = false
       }
     }

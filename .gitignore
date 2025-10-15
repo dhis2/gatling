@@ -52,3 +52,4 @@ glog
 *.csv
 *.build_artifacts.txt
 examples
+gatling-report*

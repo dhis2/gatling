@@ -196,7 +196,7 @@ object GatlingLogParser extends StrictLogging {
   }
 
   private def escapeCsv(value: String): String =
-    if (value.contains("\"") || value.contains(",") || value.contains("\n")) {
+    if (value.contains("\"") || value.contains(",") || value.contains("\n") || value.contains("|")) {
       "\"" + value.replace("\"", "\"\"") + "\""
     } else {
       value

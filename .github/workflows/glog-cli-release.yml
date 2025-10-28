@@ -2,9 +2,8 @@ name: Unofficial glog CLI Release
 
 on:
   push:
-    branches:
-      - glog-cli
-  workflow_dispatch:
+    tags:
+      - 'glog-v*.*.*'
 
 concurrency:
   group: glog-cli-release-${{ github.ref }}
@@ -16,17 +15,27 @@ defaults:
 
 jobs:
   build-and-release:
-    # Only run on your fork, not the official repository
-    if: github.repository != 'gatling/gatling'
+    # Only run on your fork, not the official repository, and only for glog-cli branch
+    if: github.repository != 'gatling/gatling' && (github.ref_type == 'tag' || github.ref_name == 'glog-cli')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       JAVA_OPTS: "-Xmx4G"
       SBT_OPTS: "-Dsbt.ci=true -Xss100M"
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Tag format: glog-v0.0.2 -> version=glog-v0.0.2, version_num=0.0.2
+          VERSION="${{ github.ref_name }}"
+          VERSION_NUM="${VERSION#glog-v}"  # Remove 'glog-v' prefix
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_num=$VERSION_NUM" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (number: $VERSION_NUM)"
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -58,83 +67,70 @@ jobs:
         run: |
           # Create release directory
           mkdir -p release
-          
+
           # Copy distribution zip
-          cp gatling-log-parser-cli/target/universal/glog.zip release/glog-0.0.1.zip
-          
+          cp gatling-log-parser-cli/target/universal/glog.zip release/glog-${{ steps.version.outputs.version_num }}.zip
+
           # Copy the project README
           cp README-CLI.md release/README.md
-          
+
           # Show what we built
           echo "Release artifacts:"
           ls -la release/
           echo ""
           echo "Distribution size:"
-          du -h release/glog-0.0.1.zip
+          du -h release/glog-${{ steps.version.outputs.version_num }}.zip
 
       - name: Test the distribution
         run: |
           echo "Testing the built distribution..."
           cd release
-          unzip -q glog-0.0.1.zip
+          unzip -q glog-${{ steps.version.outputs.version_num }}.zip
           ./glog/bin/glog --help
-
-      - name: Delete existing release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Delete existing release and tag if they exist
-          gh release delete v0.0.1 --yes 2>/dev/null || echo "No existing release to delete"
-          git tag -d v0.0.1 2>/dev/null || echo "No existing tag to delete"
-          git push origin :v0.0.1 2>/dev/null || echo "No existing remote tag to delete"
 
       - name: Create new release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create new tag
-          git tag v0.0.1
-          git push origin v0.0.1
-          
-          # Create release with artifacts
-          gh release create v0.0.1 \
-            --title "Unofficial Gatling Log Parser CLI v0.0.1" \
+          # Create release with artifacts (tag already exists from git push)
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "Unofficial Gatling Log Parser CLI ${{ steps.version.outputs.version }}" \
             --notes "**⚠️ UNOFFICIAL BUILD - NOT SUPPORTED BY GATLING TEAM**
 
           This is an automatically generated release of the unofficial Gatling Log Parser CLI.
-          
+
           ## What's Included
-          
-          * \`glog-0.0.1.zip\` - Complete distribution with JVM executable and dependencies
+
+          * \`glog-${{ steps.version.outputs.version_num }}.zip\` - Complete distribution with JVM executable and dependencies
           * \`README.md\` - Installation and usage instructions
-          
+
           ## Quick Start
-          
-          1. Download \`glog-0.0.1.zip\`
-          2. Extract: \`unzip glog-0.0.1.zip\`
+
+          1. Download \`glog-${{ steps.version.outputs.version_num }}.zip\` from the [releases page](https://github.com/${{ github.repository }}/releases)
+          2. Extract: \`unzip glog-${{ steps.version.outputs.version_num }}.zip\`
           3. Use: \`./glog/bin/glog --config gatling.conf simulation.log\`
-          
+
           ## About This Build
-          
+
           * Built from branch: \`glog-cli\`
           * Commit: ${{ github.sha }}
-          * Version: 0.0.1 (WIP)
+          * Version: ${{ steps.version.outputs.version_num }}
           * Target: Cross-platform JVM
           * Requires: Java 17+
           * This is NOT an official Gatling release
-          
+
           For support, please contact the fork maintainer." \
             --latest \
-            release/glog-0.0.1.zip \
+            release/glog-${{ steps.version.outputs.version_num }}.zip \
             release/README.md
 
       - name: Summary
         run: |
           echo "🎉 Unofficial Gatling Log Parser CLI build completed!"
           echo ""
-          echo "📦 Release: https://github.com/${{ github.repository }}/releases/tag/v0.0.1"
+          echo "📦 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
           echo "📋 Artifacts:"
-          echo "  - glog-0.0.1.zip (JVM distribution for all platforms)"
+          echo "  - glog-${{ steps.version.outputs.version_num }}.zip (JVM distribution for all platforms)"
           echo "  - README.md (Installation and usage instructions)"
           echo ""
           echo "⚠️  This is an UNOFFICIAL build, not supported by the Gatling team"

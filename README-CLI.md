@@ -7,15 +7,32 @@ A CLI to turn Gatling binary `simulation.log` files into CSV files.
 This CLI uses Gatling's internal binary log parser to extract performance test data from
 `simulation.log` files and creates `simulation.csv` next to them.
 
-## Quick Start
+## Installation
 
-Build the CLI
+### Option 1: Download Release (Recommended)
+
+Download the [latest release](https://github.com/dhis2/gatling/releases/latest), then:
+
+```sh
+# Extract the downloaded glog-X.Y.Z.zip
+unzip glog-*.zip
+cd glog
+
+# Use the CLI
+./bin/glog --config gatling.conf simulation.log
+```
+
+**Requirements:** Java 17 or later
+
+### Option 2: Build from Source
+
+Build the CLI locally:
 
 ```sh
 ./build-glog.sh
 ```
 
-Use the CLI
+Use the CLI:
 
 ```sh
 ./glog --config gatling.conf simulation.log
@@ -36,6 +53,27 @@ Run directly with SBT
 ```sh
 sbt "project gatling-log-parser-cli" "run --config gatling.conf simulation.log"
 ```
+
+## Releasing
+
+To create a new release:
+
+1. Commit and push your changes to the `glog-cli` branch
+2. Create and push a tag with the format `glog-vX.Y.Z`:
+
+```sh
+git tag glog-v0.0.2
+git push dhis2 glog-v0.0.2
+```
+
+3. GitHub Actions will automatically:
+   * Build the CLI
+   * Create `glog-X.Y.Z.zip`
+   * Publish to https://github.com/dhis2/gatling/releases/tag/glog-vX.Y.Z
+   * Mark it as the latest release
+
+**Note:** Only tags matching the pattern `glog-v*.*.*` will trigger releases. This prevents
+accidental releases from upstream Gatling tags.
 
 ## Build Options
 

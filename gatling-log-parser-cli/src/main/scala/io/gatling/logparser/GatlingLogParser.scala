@@ -18,8 +18,6 @@ package io.gatling.logparser
 
 import java.io.{ File, FileWriter, PrintWriter }
 
-import scala.collection.mutable
-
 import io.gatling.charts.stats._
 import io.gatling.commons.stats.{ KO, OK }
 import io.gatling.core.config.GatlingConfiguration
@@ -27,7 +25,6 @@ import io.gatling.core.stats.message.MessageEvent
 import io.gatling.logparser.cli.{ LogParserArgs, LogParserArgsParser }
 
 import ch.qos.logback.classic.{ Level, Logger }
-import com.tdunning.math.stats.AVLTreeDigest
 import com.typesafe.scalalogging.StrictLogging
 import org.slf4j.LoggerFactory
 
@@ -127,6 +124,7 @@ object GatlingLogParser extends StrictLogging {
               logger.debug(s"Processing: ${logFile.getAbsolutePath}")
               val logFileReader = new LogFileReader(logFile, configuration)
               val records = logFileReader.parseRaw()
+              val logFileData = logFileReader.read()
 
               // Create output file paths next to the simulation.log
               val baseName = logFile.getName.replaceAll("\\.log$", "")
@@ -144,7 +142,7 @@ object GatlingLogParser extends StrictLogging {
 
               val percentilesWriter = new PrintWriter(new FileWriter(percentilesFile))
               try {
-                outputPercentilesCsv(records, percentilesWriter)
+                outputPercentilesCsv(logFileData, percentilesWriter)
                 processedCount += 1
               } finally {
                 percentilesWriter.close()
@@ -208,48 +206,36 @@ object GatlingLogParser extends StrictLogging {
     }
   }
 
-  // Emits percentiles matching Gatling's HTML report, computed the same way as
-  // GeneralStatsBuffers in gatling-charts (AVLTreeDigest(100.0) + identical rounding).
-  // One row per (group_hierarchy, request_name) and status bucket: OK, KO, ALL.
-  private def outputPercentilesCsv(records: CollectedRecords, writer: PrintWriter): Unit = {
+  // Emits percentiles matching Gatling's HTML report by reusing gatling-charts'
+  // LogFileData.requestGeneralStats — the same code path that feeds index.html.
+  // One row per (group_hierarchy, request_name, status) where status is OK, KO, ALL.
+  private def outputPercentilesCsv(logFileData: LogFileData, writer: PrintWriter): Unit = {
     writer.println("group_hierarchy,request_name,status,count,min,p50,p75,p95,p99,max")
 
-    // Keyed by (groupHierarchy, requestName, statusLabel) where statusLabel is "OK", "KO", or "ALL".
-    // LinkedHashMap preserves first-seen order so rows line up with how Gatling renders the HTML table.
-    val digests = mutable.LinkedHashMap.empty[(String, String, String), (AVLTreeDigest, Long)]
-
-    def record(key: (String, String, String), responseTime: Int): Unit = {
-      val (digest, count) = digests.getOrElseUpdate(key, (new AVLTreeDigest(100.0), 0L))
-      digest.add(responseTime.toDouble)
-      digests.update(key, (digest, count + 1))
-    }
-
-    records.requestRecords.foreach { requestRecord =>
-      // Match ResultsHolder.addRequestRecord: skip incoming records so HTML parity holds.
-      if (!requestRecord.incoming) {
-        val groupHierarchy = requestRecord.group.map(_.hierarchy.mkString("|")).getOrElse("")
-        val statusLabel = if (requestRecord.status == OK) "OK" else "KO"
-        record((groupHierarchy, requestRecord.name, statusLabel), requestRecord.responseTime)
-        record((groupHierarchy, requestRecord.name, "ALL"), requestRecord.responseTime)
-      }
-    }
-
-    digests.foreachEntry { case ((groupHierarchy, requestName, status), (digest, count)) =>
-      writeRow(writer, groupHierarchy, requestName, status, count, digest)
+    logFileData.statsPaths.foreach {
+      case RequestStatsPath(request, group) =>
+        val groupHierarchy = group.map(_.hierarchy.mkString("|")).getOrElse("")
+        writeRow(writer, logFileData, groupHierarchy, request, group, "ALL", None)
+        writeRow(writer, logFileData, groupHierarchy, request, group, "OK", Some(OK))
+        writeRow(writer, logFileData, groupHierarchy, request, group, "KO", Some(KO))
+      case _: GroupStatsPath => // group-level stats are out of scope for v1
     }
   }
 
-  private def writeRow(writer: PrintWriter, groupHierarchy: String, requestName: String, status: String, count: Long, digest: AVLTreeDigest): Unit = {
-    val min = digest.quantile(0).toInt
-    val max = digest.quantile(1).toInt
-    val p50 = math.round(digest.quantile(0.50)).toInt
-    val p75 = math.round(digest.quantile(0.75)).toInt
-    val p95 = math.round(digest.quantile(0.95)).toInt
-    val p99 = math.round(digest.quantile(0.99)).toInt
-    writer.println(
-      s"${escapeCsv(groupHierarchy)},${escapeCsv(requestName)},$status,$count,$min,$p50,$p75,$p95,$p99,$max"
-    )
-  }
+  private def writeRow(
+      writer: PrintWriter,
+      logFileData: LogFileData,
+      groupHierarchy: String,
+      requestName: String,
+      group: Option[Group],
+      statusLabel: String,
+      status: Option[io.gatling.commons.stats.Status]
+  ): Unit =
+    logFileData.requestGeneralStats(Some(requestName), group, status).foreach { stats =>
+      writer.println(
+        s"${escapeCsv(groupHierarchy)},${escapeCsv(requestName)},$statusLabel,${stats.count},${stats.min},${stats.percentile(50)},${stats.percentile(75)},${stats.percentile(95)},${stats.percentile(99)},${stats.max}"
+      )
+    }
 
   private def escapeCsv(value: String): String =
     if (value.contains("\"") || value.contains(",") || value.contains("\n") || value.contains("|")) {

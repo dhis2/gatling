@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2025 GatlingCorp (https://gatling.io)
+ * Copyright 2011-2026 GatlingCorp (https://gatling.io)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package io.gatling.logparser
 
 import java.io.{ File, FileWriter, PrintWriter }
 
+import scala.collection.mutable
+
 import io.gatling.charts.stats._
 import io.gatling.commons.stats.{ KO, OK }
 import io.gatling.core.config.GatlingConfiguration
@@ -25,6 +27,7 @@ import io.gatling.core.stats.message.MessageEvent
 import io.gatling.logparser.cli.{ LogParserArgs, LogParserArgsParser }
 
 import ch.qos.logback.classic.{ Level, Logger }
+import com.tdunning.math.stats.AVLTreeDigest
 import com.typesafe.scalalogging.StrictLogging
 import org.slf4j.LoggerFactory
 
@@ -125,16 +128,26 @@ object GatlingLogParser extends StrictLogging {
               val logFileReader = new LogFileReader(logFile, configuration)
               val records = logFileReader.parseRaw()
 
-              // Create output file path next to the simulation.log
-              val outputFile = new File(logFile.getParentFile, logFile.getName.replaceAll("\\.log$", ".csv"))
+              // Create output file paths next to the simulation.log
+              val baseName = logFile.getName.replaceAll("\\.log$", "")
+              val outputFile = new File(logFile.getParentFile, s"$baseName.csv")
+              val percentilesFile = new File(logFile.getParentFile, s"$baseName-percentiles.csv")
               logger.debug(s"Writing CSV output to: ${outputFile.getAbsolutePath}")
+              logger.debug(s"Writing percentiles CSV output to: ${percentilesFile.getAbsolutePath}")
 
               val writer = new PrintWriter(new FileWriter(outputFile))
               try {
                 outputCsv(records, writer)
-                processedCount += 1
               } finally {
                 writer.close()
+              }
+
+              val percentilesWriter = new PrintWriter(new FileWriter(percentilesFile))
+              try {
+                outputPercentilesCsv(records, percentilesWriter)
+                processedCount += 1
+              } finally {
+                percentilesWriter.close()
               }
             } catch {
               case e: java.io.EOFException =>
@@ -193,6 +206,49 @@ object GatlingLogParser extends StrictLogging {
     records.errorRecords.foreach { errorRecord =>
       writer.println(s"error,,,,,${errorRecord.timestamp},,${escapeCsv(errorRecord.message)},,,,")
     }
+  }
+
+  // Emits percentiles matching Gatling's HTML report, computed the same way as
+  // GeneralStatsBuffers in gatling-charts (AVLTreeDigest(100.0) + identical rounding).
+  // One row per (group_hierarchy, request_name) and status bucket: OK, KO, ALL.
+  private def outputPercentilesCsv(records: CollectedRecords, writer: PrintWriter): Unit = {
+    writer.println("group_hierarchy,request_name,status,count,min,p50,p75,p95,p99,max")
+
+    // Keyed by (groupHierarchy, requestName, statusLabel) where statusLabel is "OK", "KO", or "ALL".
+    // LinkedHashMap preserves first-seen order so rows line up with how Gatling renders the HTML table.
+    val digests = mutable.LinkedHashMap.empty[(String, String, String), (AVLTreeDigest, Long)]
+
+    def record(key: (String, String, String), responseTime: Int): Unit = {
+      val (digest, count) = digests.getOrElseUpdate(key, (new AVLTreeDigest(100.0), 0L))
+      digest.add(responseTime.toDouble)
+      digests.update(key, (digest, count + 1))
+    }
+
+    records.requestRecords.foreach { requestRecord =>
+      // Match ResultsHolder.addRequestRecord: skip incoming records so HTML parity holds.
+      if (!requestRecord.incoming) {
+        val groupHierarchy = requestRecord.group.map(_.hierarchy.mkString("|")).getOrElse("")
+        val statusLabel = if (requestRecord.status == OK) "OK" else "KO"
+        record((groupHierarchy, requestRecord.name, statusLabel), requestRecord.responseTime)
+        record((groupHierarchy, requestRecord.name, "ALL"), requestRecord.responseTime)
+      }
+    }
+
+    digests.foreachEntry { case ((groupHierarchy, requestName, status), (digest, count)) =>
+      writeRow(writer, groupHierarchy, requestName, status, count, digest)
+    }
+  }
+
+  private def writeRow(writer: PrintWriter, groupHierarchy: String, requestName: String, status: String, count: Long, digest: AVLTreeDigest): Unit = {
+    val min = digest.quantile(0).toInt
+    val max = digest.quantile(1).toInt
+    val p50 = math.round(digest.quantile(0.50)).toInt
+    val p75 = math.round(digest.quantile(0.75)).toInt
+    val p95 = math.round(digest.quantile(0.95)).toInt
+    val p99 = math.round(digest.quantile(0.99)).toInt
+    writer.println(
+      s"${escapeCsv(groupHierarchy)},${escapeCsv(requestName)},$status,$count,$min,$p50,$p75,$p95,$p99,$max"
+    )
   }
 
   private def escapeCsv(value: String): String =
